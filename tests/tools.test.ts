@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildBulkReplyPayload, runCritStatus, submitCritReplies } from "../src/tools.js";
+import type { CommandExecutor } from "../src/types.js";
+
+test("runCritStatus calls crit status --json", async () => {
+  const calls: string[] = [];
+  const executor: CommandExecutor = async (command, args) => {
+    calls.push([command, ...args].join(" "));
+    return { exitCode: 0, stdout: '{"review_file":"/tmp/review.json"}', stderr: "" };
+  };
+
+  const status = await runCritStatus(executor, "crit", "/repo");
+
+  assert.deepEqual(calls, ["crit status --json"]);
+  assert.equal(status.review_file, "/tmp/review.json");
+});
+
+test("runCritStatus rejects nonzero exit", async () => {
+  const executor: CommandExecutor = async () => ({ exitCode: 2, stdout: "", stderr: "bad status" });
+
+  await assert.rejects(() => runCritStatus(executor, "crit", "/repo"), /bad status/);
+});
+
+test("runCritStatus rejects invalid JSON usefully", async () => {
+  const executor: CommandExecutor = async () => ({ exitCode: 0, stdout: "not json", stderr: "" });
+
+  await assert.rejects(() => runCritStatus(executor, "crit", "/repo"), /Invalid JSON from crit status/);
+});
+
+test("submitCritReplies sends bulk JSON to crit comment", async () => {
+  let capturedInput = "";
+  const executor: CommandExecutor = async (_command, args, options) => {
+    assert.deepEqual(args, ["comment", "--json", "--author", "Pi"]);
+    capturedInput = options.input ?? "";
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  };
+
+  await submitCritReplies(executor, "crit", "/repo", "Pi", [{ reply_to: "c_1", body: "Fixed" }]);
+
+  assert.deepEqual(JSON.parse(capturedInput), [{ reply_to: "c_1", body: "Fixed" }]);
+});
+
+test("buildBulkReplyPayload requires body", () => {
+  assert.throws(() => buildBulkReplyPayload([{ reply_to: "c_1", body: "" }]), /body is required/);
+  assert.throws(() => buildBulkReplyPayload([{ reply_to: "c_1", body: "   " }]), /body is required/);
+});

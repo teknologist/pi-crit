@@ -71,3 +71,13 @@ export type CritExtensionState = {
   injectedReviewPath?: string;
   lastError?: string;
 };
+
+export type CommandExecutor = (
+  command: string,
+  args: string[],
+  options: { cwd: string; input?: string },
+) => Promise<{
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}>;
