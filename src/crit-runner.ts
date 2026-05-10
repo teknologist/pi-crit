@@ -39,8 +39,10 @@ function spawnCrit(binary: string, args: string[], cwd: string): Promise<Pick<Cr
     child.stdout.on("data", (chunk: string) => stdout.push(chunk));
     child.stderr.on("data", (chunk: string) => stderr.push(chunk));
     child.on("error", (error) => reject(new Error(`Failed to start crit: ${error.message}`)));
-    child.on("close", (code) => {
-      resolve({ exitCode: code ?? 0, stdout: stdout.join(""), stderr: stderr.join("") });
+    child.on("close", (code, signal) => {
+      const stderrText = stderr.join("");
+      const signalDiagnostic = signal ? `crit terminated by signal ${signal}\n` : "";
+      resolve({ exitCode: code ?? (signal ? 1 : 0), stdout: stdout.join(""), stderr: `${stderrText}${signalDiagnostic}` });
     });
   });
 }

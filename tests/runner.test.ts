@@ -33,3 +33,29 @@ test("run rejects concurrent runs", async () => {
   await assert.rejects(() => runner.run([], process.cwd()), /Crit run already active/);
   await first;
 });
+
+test("signaled child returns failure and diagnostic", async () => {
+  const bin = makeCritStub(`#!/usr/bin/env node\nprocess.kill(process.pid, 'SIGTERM');\n`);
+  const runner = new CritRunner({ binary: bin });
+
+  const result = await runner.run([], process.cwd());
+
+  assert.notEqual(result.exitCode, 0);
+  assert.match(result.stderr, /signal SIGTERM/);
+});
+
+test("active clears after spawn failure", async () => {
+  const runner = new CritRunner({ binary: join(tmpdir(), "missing-crit-binary") });
+
+  await assert.rejects(() => runner.run([], process.cwd()), /Failed to start crit/);
+  assert.equal(runner.active, false);
+});
+
+test("active clears after normal completion", async () => {
+  const bin = makeCritStub(`#!/usr/bin/env node\nprocess.exit(0);\n`);
+  const runner = new CritRunner({ binary: bin });
+
+  await runner.run([], process.cwd());
+
+  assert.equal(runner.active, false);
+});
