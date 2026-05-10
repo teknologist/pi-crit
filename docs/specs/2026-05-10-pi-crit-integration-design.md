@@ -8,7 +8,8 @@ This design explicitly avoids copy/paste workflows and avoids shelling back into
 
 ## Goals
 
-- Provide a Pi package installable with `pi install /path/to/pi-crit`.
+- Provide a Pi package installable for development with `pi install /path/to/pi-crit`.
+- Release the integration as a GitHub-installable package with `pi install https://github.com/teknologist/pi-crit`.
 - Expose `/crit [args]` as a pass-through command to the installed `crit` binary.
 - Expose convenience commands for common Crit workflows.
 - Capture Crit’s foreground completion after the user clicks “Finish Review”.
@@ -28,7 +29,9 @@ This design explicitly avoids copy/paste workflows and avoids shelling back into
 
 ## Architecture
 
-`pi-crit` is a Pi package with a `package.json` `pi` manifest. It contains:
+`pi-crit` is a Pi package with a `package.json` `pi` manifest. During development it should be installable from a local path. For release it should be installable directly from GitHub with `pi install https://github.com/teknologist/pi-crit`.
+
+It contains:
 
 - A TypeScript Pi extension.
 - Packaged Pi skills adapted from Crit’s existing Codex skills.
@@ -200,7 +203,8 @@ Manual validation should verify the end-to-end browser loop with the real Homebr
 
 The integration is successful when:
 
-- A user can install the package into Pi with a local project path.
+- A developer can install the package into Pi with a local project path.
+- A release user can install the package with `pi install https://github.com/teknologist/pi-crit`.
 - A user can run `/crit ...` inside Pi.
 - Crit opens its browser review UI normally.
 - After “Finish Review”, Pi automatically receives the user-authored Crit comments.
