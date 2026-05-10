@@ -22,23 +22,24 @@ export default function piCritExtension(pi: ExtensionAPI): void {
     promptPaths: [join(baseDir, "..", "prompts")],
   }));
 
-  pi.on("before_agent_start", (event) => {
+  pi.on("before_agent_start", () => {
     if (!state.summary || state.injectedReviewPath === state.summary.reviewPath) return undefined;
     const formatted = formatCritContext(state.summary, settings.maxInjectedChars);
     state.injectedReviewPath = state.summary.reviewPath;
+    const details: { reviewPath: string; compacted: boolean; nextCommand?: string } = {
+      reviewPath: state.summary.reviewPath,
+      compacted: formatted.compacted,
+    };
+    if (state.summary.nextCommand !== undefined) details.nextCommand = state.summary.nextCommand;
 
     return {
       message: {
         customType: "crit-review-context",
         content: formatted.text,
         display: true,
-        details: {
-          reviewPath: state.summary.reviewPath,
-          nextCommand: state.summary.nextCommand,
-          compacted: formatted.compacted,
-        },
+        details,
       },
-      systemPrompt: `${event.systemPrompt}\n\n${formatted.text}`,
+      systemPrompt: "Use the Crit review context message as authoritative guidance for this turn.",
     };
   });
 
@@ -125,12 +126,17 @@ export default function piCritExtension(pi: ExtensionAPI): void {
       delete state.injectedReviewPath;
 
       commandCtx?.ui?.notify?.(`Captured ${comments.length} Crit comments. Starting Pi follow-up turn.`, "info");
+      const details: { reviewPath: string; commentCount: number; nextCommand?: string } = {
+        reviewPath: summary.reviewPath,
+        commentCount: comments.length,
+      };
+      if (summary.nextCommand !== undefined) details.nextCommand = summary.nextCommand;
       pi.sendMessage(
         {
           customType: "crit-review-ready",
           content: "Crit review is ready. Address the injected Crit comments now.",
           display: true,
-          details: { reviewPath: summary.reviewPath, nextCommand: summary.nextCommand, commentCount: comments.length },
+          details,
         },
         { triggerTurn: true, deliverAs: "steer" },
       );
@@ -146,7 +152,50 @@ export default function piCritExtension(pi: ExtensionAPI): void {
 }
 
 function splitArgs(input: string): string[] {
-  const trimmed = input.trim();
-  if (!trimmed) return [];
-  return trimmed.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((part) => part.replace(/^(["'])(.*)\1$/, "$2")) ?? [];
+  const args: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | undefined;
+  let escaping = false;
+
+  for (const char of input) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaping) throw new Error("Usage error: dangling escape in arguments");
+  if (quote) throw new Error(`Usage error: unmatched ${quote === "'" ? "single" : "double"} quote in arguments`);
+  if (current) args.push(current);
+  return args;
 }
