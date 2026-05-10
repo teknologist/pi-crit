@@ -1,0 +1,30 @@
+{
+  "name": "pi-crit",
+  "version": "0.1.0",
+  "description": "Pi coding agent integration for Crit inline reviews",
+  "type": "module",
+  "private": false,
+  "keywords": ["pi-package", "pi", "crit", "code-review"],
+  "scripts": {
+    "check": "tsc --noEmit && tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "pi": {
+    "extensions": ["./src/index.ts"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
