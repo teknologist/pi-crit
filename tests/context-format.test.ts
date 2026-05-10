@@ -48,6 +48,9 @@ test("formatCritContext compacts resolved history when over budget", () => {
 
   assert.equal(context.compacted, true);
   assert.match(context.text, /Context compacted/);
+  assert.match(context.text, /Approved: false/);
   assert.match(context.text, /Fix this behavior/);
+  assert.match(context.text, /r_0/);
+  assert.match(context.text, /Resolved guidance 0/);
   assert.ok(context.text.length <= 2_000);
 });

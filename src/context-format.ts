@@ -15,7 +15,7 @@ export function formatCritContext(summary: CritReviewSummary, maxInjectedChars: 
   const compacted = buildContext(summary, active, compactResolved(resolved), true);
   if (compacted.length <= maxInjectedChars) return { text: compacted, compacted: true };
 
-  return { text: truncatePreservingActive(summary, active, maxInjectedChars), compacted: true };
+  return { text: truncatePreservingActive(summary, active, resolved, maxInjectedChars), compacted: true };
 }
 
 function buildContext(
@@ -80,36 +80,67 @@ function summarize(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength - 1)}…`;
 }
 
-function truncatePreservingActive(summary: CritReviewSummary, active: CritComment[], maxInjectedChars: number): string {
+function truncatePreservingActive(
+  summary: CritReviewSummary,
+  active: CritComment[],
+  resolved: CritComment[],
+  maxInjectedChars: number,
+): string {
   const budget = Math.max(0, maxInjectedChars);
   const header = [
     "<crit_review_context>",
     "# Crit Review Context",
     `Review file: ${summary.reviewPath}`,
     summary.nextCommand ? `Next round: ${summary.nextCommand}` : undefined,
+    typeof summary.approved === "boolean" ? `Approved: ${summary.approved}` : undefined,
     "Context compacted: formatted review exceeded crit.maxInjectedChars; full review remains available through Crit tools.",
     "",
     "## Active comments",
   ].filter((line): line is string => line !== undefined).join("\n");
 
-  const footer = "\n\n## Resolved guidance\nResolved guidance summarized due to crit.maxInjectedChars. Use Crit tools for full review.\n</crit_review_context>\n";
+  const resolvedPrefix = "\n\n## Resolved guidance\n";
+  const footer = "\n</crit_review_context>\n";
   const activeText = active.map(formatComment).join("\n\n");
-  const available = budget - header.length - footer.length - 1;
+  const resolvedBudget = Math.max(80, Math.floor(budget * 0.25));
+  const resolvedText = compactResolvedGuidance(resolved, resolvedBudget);
+  const available = budget - header.length - resolvedPrefix.length - resolvedText.length - footer.length - 1;
 
   if (available >= 0) {
-    return `${header}\n${summarize(activeText, available)}${footer}`;
+    return `${header}\n${summarize(activeText, available)}${resolvedPrefix}${resolvedText}${footer}`;
   }
 
   const minimal = [
     "<crit_review_context>",
     "# Crit Review Context",
+    typeof summary.approved === "boolean" ? `Approved: ${summary.approved}` : undefined,
     "Context compacted: crit.maxInjectedChars too small for full formatted review.",
     "## Active comments",
-    summarize(activeText, Math.max(0, budget)),
+    summarize(activeText, Math.max(0, Math.floor(budget * 0.6))),
     "## Resolved guidance",
-    "Resolved guidance summarized due to crit.maxInjectedChars.",
+    compactResolvedGuidance(resolved, Math.max(0, Math.floor(budget * 0.3))),
     "</crit_review_context>",
-  ].join("\n");
+  ].filter((line): line is string => line !== undefined).join("\n");
 
   return summarize(minimal, budget);
+}
+
+function compactResolvedGuidance(comments: CritComment[], maxLength: number): string {
+  if (!comments.length) return "No resolved guidance.";
+
+  const ids = comments.map((comment) => comment.id);
+  const lines = [
+    `Resolved guidance summarized due to crit.maxInjectedChars (${comments.length} resolved: ${ids.slice(0, 8).join(", ")}${ids.length > 8 ? ", …" : ""}).`,
+  ];
+
+  for (const comment of comments) {
+    const snippet = summarize(comment.body.replace(/\s+/g, " ").trim(), 120);
+    lines.push(`- [resolved] ${comment.id}: ${snippet}`);
+    const text = lines.join("\n");
+    if (text.length > maxLength) {
+      lines.pop();
+      break;
+    }
+  }
+
+  return summarize(lines.join("\n"), maxLength);
 }
