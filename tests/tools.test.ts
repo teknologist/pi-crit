@@ -30,7 +30,8 @@ test("runCritStatus rejects invalid JSON usefully", async () => {
 
 test("submitCritReplies sends bulk JSON to crit comment", async () => {
   let capturedInput = "";
-  const executor: CommandExecutor = async (_command, args, options) => {
+  const executor: CommandExecutor = async (command, args, options) => {
+    assert.equal(command, "crit");
     assert.deepEqual(args, ["comment", "--json", "--author", "Pi"]);
     capturedInput = options.input ?? "";
     return { exitCode: 0, stdout: "ok", stderr: "" };
