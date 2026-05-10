@@ -42,6 +42,7 @@ test("signaled child returns failure and diagnostic", async () => {
 
   assert.notEqual(result.exitCode, 0);
   assert.match(result.stderr, /signal SIGTERM/);
+  assert.equal(runner.active, false);
 });
 
 test("active clears after spawn failure", async () => {
