@@ -54,13 +54,16 @@ Pi extension hooks provide the integration points:
 
 Passes arguments directly to the installed `crit` binary. This is the canonical command because it preserves Crit’s CLI surface.
 
+Calling `/crit` with no arguments is meaningful: it starts a Crit review for all modified/unstaged working-tree changes/files in the current repository. The extension should invoke Crit’s default no-argument behavior for this if Crit supports it directly; otherwise it should resolve the modified/unstaged file list and pass those files to Crit.
+
 Examples:
 
+- `/crit` reviews all modified/unstaged working-tree changes/files.
 - `/crit path/to/file.ts`
 - `/crit --pr 123`
 - `/crit main..feature-branch`
 
-The implementation should forward args without inventing a separate argument model. Quoting and path handling should be tested against Pi command parsing.
+The implementation should forward explicit args without inventing a separate argument model. Quoting and path handling should be tested against Pi command parsing. The no-argument case is the only special case.
 
 ### Convenience commands
 
@@ -183,19 +186,20 @@ Automated tests should use fixtures instead of requiring an interactive browser 
 Test coverage should include:
 
 1. Package manifest discovery for extensions, skills, and prompts.
-2. `/crit [args]` forwarding to an executable Crit stub from the current working directory.
-3. Convenience commands mapping to the same runner.
-4. Crit stdout fixture parsing for review file path and exact `Next round:` command.
-5. Review JSON fixture parsing for global, file, and line comments.
-6. Context-block generation from user-authored comments.
-7. Duplicate-injection prevention.
-8. Auto-start steering message emitted once per captured review.
-9. `crit_status` calling `crit status --json` and returning parsed JSON.
-10. `crit_reply` calling `crit comment --json` with bulk payloads.
-11. Missing binary failure.
-12. Missing review file failure.
-13. Invalid JSON failure.
-14. Active-run conflict failure.
+2. `/crit` with no arguments starting a review for modified/unstaged working-tree changes/files.
+3. `/crit [args]` forwarding explicit args to an executable Crit stub from the current working directory.
+4. Convenience commands mapping to the same runner.
+5. Crit stdout fixture parsing for review file path and exact `Next round:` command.
+6. Review JSON fixture parsing for global, file, and line comments.
+7. Context-block generation from user-authored comments.
+8. Duplicate-injection prevention.
+9. Auto-start steering message emitted once per captured review.
+10. `crit_status` calling `crit status --json` and returning parsed JSON.
+11. `crit_reply` calling `crit comment --json` with bulk payloads.
+12. Missing binary failure.
+13. Missing review file failure.
+14. Invalid JSON failure.
+15. Active-run conflict failure.
 
 Manual validation should verify the end-to-end browser loop with the real Homebrew-installed `crit` binary.
 
@@ -205,7 +209,8 @@ The integration is successful when:
 
 - A developer can install the package into Pi with a local project path.
 - A release user can install the package with `pi install https://github.com/teknologist/pi-crit`.
-- A user can run `/crit ...` inside Pi.
+- A user can run `/crit` inside Pi to review all modified/unstaged working-tree changes/files.
+- A user can run `/crit ...` inside Pi to review explicit files, PRs, or ranges.
 - Crit opens its browser review UI normally.
 - After “Finish Review”, Pi automatically receives the user-authored Crit comments.
 - The next Pi agent turn starts without copy/paste and without `pi -p`.
