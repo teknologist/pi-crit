@@ -19,16 +19,36 @@ export const nodeCommandExecutor: CommandExecutor = (command, args, options) => 
     const child = spawn(command, args, { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] });
     const stdout: string[] = [];
     const stderr: string[] = [];
+    let settled = false;
+
+    const resolveOnce = (result: { exitCode: number; stdout: string; stderr: string }) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const rejectOnce = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => stdout.push(chunk));
     child.stderr.on("data", (chunk: string) => stderr.push(chunk));
-    child.on("error", (error) => reject(new Error(`Failed to start ${command}: ${error.message}`)));
+    child.on("error", (error) => rejectOnce(new Error(`Failed to start ${command}: ${error.message}`)));
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      const stderrText = stderr.join("");
+      resolveOnce({
+        exitCode: 1,
+        stdout: stdout.join(""),
+        stderr: `${stderrText}${command} stdin error: ${error.message}\n`,
+      });
+    });
     child.on("close", (code, signal) => {
       const stderrText = stderr.join("");
       const signalDiagnostic = signal ? `${command} terminated by signal ${signal}\n` : "";
-      resolve({
+      resolveOnce({
         exitCode: code ?? (signal ? 1 : 0),
         stdout: stdout.join(""),
         stderr: `${stderrText}${signalDiagnostic}`,
@@ -47,7 +67,11 @@ export async function runCritStatus(
   if (result.exitCode !== 0) throw new Error(result.stderr || `crit status exited ${result.exitCode}`);
 
   try {
-    return JSON.parse(result.stdout) as Record<string, unknown>;
+    const parsed = JSON.parse(result.stdout) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("expected object JSON");
+    }
+    return parsed as Record<string, unknown>;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid JSON from crit status: ${message}`);

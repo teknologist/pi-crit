@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBulkReplyPayload, runCritStatus, submitCritReplies } from "../src/tools.js";
+import { buildBulkReplyPayload, nodeCommandExecutor, runCritStatus, submitCritReplies } from "../src/tools.js";
 import type { CommandExecutor } from "../src/types.js";
 
 test("runCritStatus calls crit status --json", async () => {
@@ -26,6 +26,21 @@ test("runCritStatus rejects invalid JSON usefully", async () => {
   const executor: CommandExecutor = async () => ({ exitCode: 0, stdout: "not json", stderr: "" });
 
   await assert.rejects(() => runCritStatus(executor, "crit", "/repo"), /Invalid JSON from crit status/);
+});
+
+test("runCritStatus rejects non-object JSON", async () => {
+  const executor: CommandExecutor = async () => ({ exitCode: 0, stdout: "null", stderr: "" });
+
+  await assert.rejects(() => runCritStatus(executor, "crit", "/repo"), /expected object JSON/);
+});
+
+test("nodeCommandExecutor handles stdin errors when child exits before reading", async () => {
+  const result = await nodeCommandExecutor(process.execPath, ["-e", "process.exit(0)"], {
+    cwd: process.cwd(),
+    input: "x".repeat(1024 * 1024 * 64),
+  });
+
+  assert.equal(typeof result.exitCode, "number");
 });
 
 test("submitCritReplies sends bulk JSON to crit comment", async () => {
