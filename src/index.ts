@@ -1,6 +1,4 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { flattenReviewComments, parseReviewJson } from "./crit-parser.js";
 import { CritRunner } from "./crit-runner.js";
@@ -8,19 +6,12 @@ import { formatCritContext } from "./context-format.js";
 import { registerCritTools } from "./tools.js";
 import { defaultCritSettings, type CritExtensionState, type CritReviewSummary } from "./types.js";
 
-const baseDir = dirname(fileURLToPath(import.meta.url));
-
 export default function piCritExtension(pi: ExtensionAPI): void {
   const settings = defaultCritSettings();
   const state: CritExtensionState = { activeRun: false };
   const runner = new CritRunner({ binary: settings.binary });
 
   const cwd = () => process.cwd();
-
-  pi.on("resources_discover", () => ({
-    skillPaths: [join(baseDir, "..", "skills")],
-    promptPaths: [join(baseDir, "..", "prompts")],
-  }));
 
   pi.on("before_agent_start", () => {
     if (!state.summary || state.injectedReviewPath === state.summary.reviewPath) return undefined;
