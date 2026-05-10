@@ -16,7 +16,7 @@ const baseComment: CritComment = {
 };
 
 const summary = (comments: CritComment[]): CritReviewSummary => ({
-  reviewPath: "/tmp/review.json",
+  reviewPath: "/home/user/.crit/reviews/51664d89943d/review.json",
   nextCommand: "crit",
   approved: false,
   comments,

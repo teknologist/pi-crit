@@ -7,13 +7,13 @@ test("runCritStatus calls crit status --json", async () => {
   const calls: string[] = [];
   const executor: CommandExecutor = async (command, args) => {
     calls.push([command, ...args].join(" "));
-    return { exitCode: 0, stdout: '{"review_file":"/tmp/review.json"}', stderr: "" };
+    return { exitCode: 0, stdout: '{"review_file":"/home/user/.crit/reviews/51664d89943d/review.json"}', stderr: "" };
   };
 
   const status = await runCritStatus(executor, "crit", "/repo");
 
   assert.deepEqual(calls, ["crit status --json"]);
-  assert.equal(status.review_file, "/tmp/review.json");
+  assert.equal(status.review_file, "/home/user/.crit/reviews/51664d89943d/review.json");
 });
 
 test("runCritStatus rejects nonzero exit", async () => {

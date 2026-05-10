@@ -3,7 +3,9 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { flattenReviewComments, parseReviewJson } from "./crit-parser.js";
 import { CritRunner } from "./crit-runner.js";
 import { formatCritContext } from "./context-format.js";
-import { registerCritTools } from "./tools.js";
+import { extractLocalCritUrl, formatHeadlessCritGuidance, prepareCritArgs } from "./headless.js";
+import { critRunDiagnostic, hasUnresolvedComments, isApprovedWithoutAction, isDaemonStartOnlyOutput } from "./run-result.js";
+import { nodeCommandExecutor, registerCritTools, runCritStatus } from "./tools.js";
 import { defaultCritSettings, type CritExtensionState, type CritReviewSummary } from "./types.js";
 
 export default function piCritExtension(pi: ExtensionAPI): void {
@@ -72,41 +74,110 @@ export default function piCritExtension(pi: ExtensionAPI): void {
     },
   });
 
+  async function notifyExistingCritDaemon(commandCtx?: ExtensionCommandContext): Promise<void> {
+    try {
+      const status = await runCritStatus(nodeCommandExecutor, settings.binary, cwd());
+      const daemon = status.daemon;
+      if (!daemon || typeof daemon !== "object" || Array.isArray(daemon)) return;
+      const running = (daemon as { running?: unknown }).running;
+      const port = (daemon as { port?: unknown }).port;
+      if (running === true) {
+        const suffix = typeof port === "number" ? ` on port ${port}` : "";
+        commandCtx?.ui?.notify?.(`Reusing existing Crit daemon${suffix}.`, "info");
+      }
+    } catch {
+      // Best-effort status check only; Crit itself handles daemon reuse/startup.
+    }
+  }
+
+  async function findReviewPathFromStatus(): Promise<string | undefined> {
+    try {
+      const status = await runCritStatus(nodeCommandExecutor, settings.binary, cwd());
+      const reviewPath = status.review_file;
+      if (typeof reviewPath === "string" && status.review_file_exists !== false) return reviewPath;
+    } catch {
+      return undefined;
+    }
+    return undefined;
+  }
+
   async function runCrit(args: string[], commandCtx?: ExtensionCommandContext): Promise<CritReviewSummary> {
     let started = false;
 
     try {
       if (state.activeRun || runner.active) throw new Error("Crit run already active");
 
+      const prepared = prepareCritArgs(args);
       state.activeRun = true;
-      state.activeCommand = args;
+      state.activeCommand = prepared.args;
       delete state.lastError;
       started = true;
 
+      await notifyExistingCritDaemon(commandCtx);
+
       commandCtx?.ui?.notify?.("Running Crit review...", "info");
-      const result = await runner.run(args, cwd());
+      if (prepared.environment.noOpenAdded) {
+        commandCtx?.ui?.notify?.("Headless or SSH session detected; running Crit with --no-open.", "info");
+      }
+
+      let showedHeadlessGuidance = false;
+      const result = await runner.run(prepared.args, cwd(), (_stream, chunk) => {
+        for (const line of chunk.split(/\r?\n/)) {
+          const message = line.trim();
+          if (!message) continue;
+          commandCtx?.ui?.notify?.(message, "info");
+          const url = extractLocalCritUrl(message);
+          if (url && prepared.environment.headless && !showedHeadlessGuidance) {
+            showedHeadlessGuidance = true;
+            commandCtx?.ui?.notify?.(formatHeadlessCritGuidance(url), "info");
+          }
+        }
+      });
       state.activeRun = false;
       started = false;
 
-      if (result.exitCode !== 0) {
-        throw new Error(result.stderr || `crit exited ${result.exitCode}`);
+      const reviewPath = result.reviewPath ?? (await findReviewPathFromStatus());
+      const diagnostic = critRunDiagnostic(result);
+
+      if (isApprovedWithoutAction(result)) {
+        const summary: CritReviewSummary = {
+          reviewPath: reviewPath ?? "",
+          approved: true,
+          comments: [],
+        };
+        state.summary = summary;
+        if (reviewPath) state.reviewPath = reviewPath;
+        commandCtx?.ui?.notify?.("Crit approved with no unresolved comments to address.", "info");
+        return summary;
       }
 
-      if (!result.reviewPath) {
-        const diagnostic = result.stderr || result.stdout || `crit exited ${result.exitCode} without a review path`;
-        throw new Error(diagnostic.trim());
+      if (result.exitCode !== 0 && !reviewPath) {
+        if (result.approved === true || isDaemonStartOnlyOutput(diagnostic)) {
+          const summary: CritReviewSummary = {
+            reviewPath: "",
+            approved: result.approved ?? true,
+            comments: [],
+          };
+          commandCtx?.ui?.notify?.("Crit finished with no comments to address.", "info");
+          return summary;
+        }
+        throw new Error(diagnostic);
       }
 
-      const rawReview = await readFile(result.reviewPath, "utf8");
+      if (!reviewPath) {
+        throw new Error((diagnostic || `crit exited ${result.exitCode}`).trim());
+      }
+
+      const rawReview = await readFile(reviewPath, "utf8");
       const comments = flattenReviewComments(parseReviewJson(rawReview));
       const summary: CritReviewSummary = {
-        reviewPath: result.reviewPath,
+        reviewPath,
         comments,
       };
       if (result.nextCommand !== undefined) summary.nextCommand = result.nextCommand;
       if (result.approved !== undefined) summary.approved = result.approved;
 
-      state.reviewPath = result.reviewPath;
+      state.reviewPath = reviewPath;
       if (result.nextCommand !== undefined) {
         state.nextCommand = result.nextCommand;
       } else {
@@ -114,6 +185,11 @@ export default function piCritExtension(pi: ExtensionAPI): void {
       }
       state.summary = summary;
       delete state.injectedReviewPath;
+
+      if (!hasUnresolvedComments(comments)) {
+        commandCtx?.ui?.notify?.("Crit finished with no unresolved comments to address.", "info");
+        return summary;
+      }
 
       commandCtx?.ui?.notify?.(`Captured ${comments.length} Crit comments. Starting Pi follow-up turn.`, "info");
       const details: { reviewPath: string; commentCount: number; nextCommand?: string } = {

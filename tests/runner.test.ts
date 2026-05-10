@@ -15,14 +15,24 @@ function makeCritStub(script: string): string {
 
 test("run forwards explicit args and parses Crit output", async () => {
   const log = join(mkdtempSync(join(tmpdir(), "pi-crit-log-")), "args.txt");
-  const bin = makeCritStub(`#!/usr/bin/env node\nconst fs = require('fs');\nfs.writeFileSync(${JSON.stringify(log)}, process.argv.slice(2).join('|'));\nconsole.log('Review comments are in /tmp/review.json');\nconsole.log('Next round: crit src/index.ts');\n`);
+  const bin = makeCritStub(`#!/usr/bin/env node\nconst fs = require('fs');\nfs.writeFileSync(${JSON.stringify(log)}, process.argv.slice(2).join('|'));\nconsole.log('Review comments are in /home/user/.crit/reviews/51664d89943d/review.json');\nconsole.log('Next round: crit src/index.ts');\n`);
 
   const runner = new CritRunner({ binary: bin });
   const result = await runner.run(["src/index.ts"], process.cwd());
 
   assert.equal(readFileSync(log, "utf8"), "src/index.ts");
-  assert.equal(result.reviewPath, "/tmp/review.json");
+  assert.equal(result.reviewPath, "/home/user/.crit/reviews/51664d89943d/review.json");
   assert.equal(result.nextCommand, "crit src/index.ts");
+});
+
+test("run emits child output while Crit is active", async () => {
+  const bin = makeCritStub(`#!/usr/bin/env node\nconsole.log('Started crit daemon at http://localhost:12345');\nsetTimeout(() => process.exit(0), 150);\n`);
+  const runner = new CritRunner({ binary: bin });
+  const output: string[] = [];
+
+  await runner.run([], process.cwd(), (_stream, chunk) => output.push(chunk));
+
+  assert.match(output.join(""), /Started crit daemon at http:\/\/localhost:12345/);
 });
 
 test("run rejects concurrent runs", async () => {

@@ -1,9 +1,17 @@
 import type { CritComment, CritRawComment, CritReviewFile, CritRunResult } from "./types.js";
 
 const REVIEW_PATH_PATTERNS = [
-  /Review comments are in\s+([^\n\r]+)/i,
-  /review file:?\s+([^\n\r]+)/i,
+  /^\s*Review comments are in\s+([^\n\r]+)/im,
+  /^\s*review file:?\s+([^\n\r]+)/im,
 ];
+
+type CritOutputJson = {
+  approved?: unknown;
+  next_command?: unknown;
+  review_file?: unknown;
+  review_path?: unknown;
+  reviewPath?: unknown;
+};
 
 export function parseCritOutput(output: string): Pick<CritRunResult, "reviewPath" | "nextCommand" | "approved"> {
   const reviewPath = extractReviewPath(output);
@@ -53,10 +61,15 @@ export function flattenReviewComments(review: CritReviewFile): CritComment[] {
 }
 
 function extractReviewPath(output: string): string | undefined {
+  for (const parsed of parseCritOutputJsonLines(output)) {
+    const value = firstString(parsed.review_file, parsed.review_path, parsed.reviewPath);
+    if (value) return value;
+  }
+
   for (const pattern of REVIEW_PATH_PATTERNS) {
     const match = output.match(pattern);
     const value = match?.[1]?.trim();
-    if (value) return value;
+    if (value) return stripReviewPathTrailer(value);
   }
   return undefined;
 }
@@ -65,34 +78,47 @@ function extractNextCommand(output: string): string | undefined {
   const explicit = output.match(/^Next round:\s*(.+)$/im)?.[1]?.trim();
   if (explicit) return explicit;
 
-  for (const line of output.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
-    try {
-      const parsed = JSON.parse(trimmed) as { next_command?: unknown };
-      if (typeof parsed.next_command === "string" && parsed.next_command.trim()) {
-        return parsed.next_command.trim();
-      }
-    } catch {
-      continue;
-    }
+  for (const parsed of parseCritOutputJsonLines(output)) {
+    const value = firstString(parsed.next_command);
+    if (value) return value;
   }
 
   return undefined;
 }
 
 function extractApproved(output: string): boolean | undefined {
+  for (const parsed of parseCritOutputJsonLines(output)) {
+    if (typeof parsed.approved === "boolean") return parsed.approved;
+  }
+  return undefined;
+}
+
+function parseCritOutputJsonLines(output: string): CritOutputJson[] {
+  const parsed: CritOutputJson[] = [];
+
   for (const line of output.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
     try {
-      const parsed = JSON.parse(trimmed) as { approved?: unknown };
-      if (typeof parsed.approved === "boolean") return parsed.approved;
+      const value = JSON.parse(trimmed) as unknown;
+      if (value && typeof value === "object" && !Array.isArray(value)) parsed.push(value as CritOutputJson);
     } catch {
       continue;
     }
   }
+
+  return parsed;
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
   return undefined;
+}
+
+function stripReviewPathTrailer(value: string): string {
+  return value.split(/\s+—\s+/)[0]?.trim() ?? value;
 }
 
 function inferFileCommentScope(startLine: number | undefined): "file" | "line" {

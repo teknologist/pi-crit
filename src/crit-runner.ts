@@ -14,12 +14,12 @@ export class CritRunner {
     return this.#active;
   }
 
-  async run(args: string[], cwd: string): Promise<CritRunResult> {
+  async run(args: string[], cwd: string, onOutput?: (stream: "stdout" | "stderr", chunk: string) => void): Promise<CritRunResult> {
     if (this.#active) throw new Error("Crit run already active");
     this.#active = true;
 
     try {
-      const result = await spawnCrit(this.#binary, args, cwd);
+      const result = await spawnCrit(this.#binary, args, cwd, onOutput);
       const parsed = parseCritOutput(`${result.stdout}\n${result.stderr}`);
       return { ...result, ...parsed };
     } finally {
@@ -28,7 +28,12 @@ export class CritRunner {
   }
 }
 
-function spawnCrit(binary: string, args: string[], cwd: string): Promise<Pick<CritRunResult, "exitCode" | "stdout" | "stderr">> {
+function spawnCrit(
+  binary: string,
+  args: string[],
+  cwd: string,
+  onOutput?: (stream: "stdout" | "stderr", chunk: string) => void,
+): Promise<Pick<CritRunResult, "exitCode" | "stdout" | "stderr">> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     const stdout: string[] = [];
@@ -36,8 +41,14 @@ function spawnCrit(binary: string, args: string[], cwd: string): Promise<Pick<Cr
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: string) => stderr.push(chunk));
+    child.stdout.on("data", (chunk: string) => {
+      stdout.push(chunk);
+      onOutput?.("stdout", chunk);
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr.push(chunk);
+      onOutput?.("stderr", chunk);
+    });
     child.on("error", (error) => reject(new Error(`Failed to start crit: ${error.message}`)));
     child.on("close", (code, signal) => {
       const stderrText = stderr.join("");

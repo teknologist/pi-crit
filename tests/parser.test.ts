@@ -9,9 +9,18 @@ const fixture = (name: string) => readFileSync(join("tests", "fixtures", name), 
 test("parseCritOutput extracts review path, approval, and next command", () => {
   const result = parseCritOutput(fixture("crit-finished.txt"));
 
-  assert.equal(result.reviewPath, "/tmp/pi-crit-review.json");
+  assert.equal(result.reviewPath, "/home/user/.crit/reviews/abc123def456/review.json");
   assert.equal(result.approved, false);
   assert.equal(result.nextCommand, "crit --range abc123..def456");
+});
+
+test("parseCritOutput prefers machine JSON review file over prose in next command", () => {
+  const result = parseCritOutput(
+    '{"next_command":"Read review file: /home/user/.crit/reviews/51664d89943d/review.json — comments are grouped. When done run: `crit`","review_file":"/home/user/.crit/reviews/51664d89943d/review.json","status":"finished"}',
+  );
+
+  assert.equal(result.reviewPath, "/home/user/.crit/reviews/51664d89943d/review.json");
+  assert.equal(result.nextCommand, "Read review file: /home/user/.crit/reviews/51664d89943d/review.json — comments are grouped. When done run: `crit`");
 });
 
 test("parseReviewJson validates object JSON", () => {
