@@ -134,7 +134,7 @@ Do not inject by default:
 
 Resolved comments must not be discarded. They should be included as guidance when they help explain the user's intent, prior decisions, or why an issue is already considered handled. They should be clearly marked as resolved so the agent does not treat them as new required work.
 
-A comment payload is considered too large when the formatted Crit context block exceeds a configurable injection budget. The default budget should be explicit in implementation, documented in package settings, and chosen conservatively enough to avoid crowding out the user's prompt and normal repo context. When the budget is exceeded, the extension should:
+A comment payload is considered too large when the formatted Crit context block exceeds `crit.maxInjectedChars`. The sane default is `12000` characters, which is large enough for detailed review comments but conservative enough to avoid crowding out the user's prompt and normal repo context. The setting should be documented and configurable for users who want more or less injected context. When the budget is exceeded, the extension should:
 
 1. Always preserve every comment in extension state and tool-accessible data.
 2. Inject all active/unresolved comments first.
@@ -172,7 +172,7 @@ Handle these cases:
 - Auto-starting the follow-up agent turn fails.
 - A Crit run is requested while another Crit run is active.
 
-If auto-start fails after review capture, the extension should still store the Crit context and inject it into the next user prompt. If the formatted Crit context exceeds the configured injection budget, it should compact the injected block without discarding any comments from extension state, then expose the full review through a tool.
+If auto-start fails after review capture, the extension should still store the Crit context and inject it into the next user prompt. If the formatted Crit context exceeds `crit.maxInjectedChars`, it should compact the injected block without discarding any comments from extension state, then expose the full review through a tool.
 
 ## Packaged skills
 
@@ -200,7 +200,7 @@ Test coverage should include:
 5. Crit stdout fixture parsing for review file path and exact `Next round:` command.
 6. Review JSON fixture parsing for global, file, line, active, and resolved comments.
 7. Context-block generation from user-authored comments, including resolved history marked as guidance.
-8. Injection-budget compaction that preserves full review data in tool-accessible state.
+8. `crit.maxInjectedChars` defaulting to `12000` and compaction preserving full review data in tool-accessible state.
 9. Duplicate-injection prevention.
 10. Auto-start steering message emitted once per captured review.
 11. `crit_status` calling `crit status --json` and returning parsed JSON.
