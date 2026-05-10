@@ -122,6 +122,7 @@ By default, inject:
 - Exact `Next round:` command.
 - Approval status if present.
 - User-authored global, file, and line comments that still need agent attention.
+- Resolved comment history, marked as resolved, when it provides guidance for current work or explains prior decisions.
 - Stable identifiers needed to reply through Crit.
 - File paths and line numbers needed to inspect code.
 
@@ -130,9 +131,16 @@ Do not inject by default:
 - Full raw review JSON.
 - Full grid output.
 - Full diff contents.
-- Resolved comment history that does not require action.
 
-If the comment payload is too large, inject a truncated summary with clear truncation markers and expose the full review through `crit_status` or a dedicated full-review tool/result detail.
+Resolved comments must not be discarded. They should be included as guidance when they help explain the user's intent, prior decisions, or why an issue is already considered handled. They should be clearly marked as resolved so the agent does not treat them as new required work.
+
+A comment payload is considered too large when the formatted Crit context block exceeds a configurable injection budget. The default budget should be explicit in implementation, documented in package settings, and chosen conservatively enough to avoid crowding out the user's prompt and normal repo context. When the budget is exceeded, the extension should:
+
+1. Always preserve every comment in extension state and tool-accessible data.
+2. Inject all active/unresolved comments first.
+3. Inject resolved comments as compact thread summaries instead of dropping them.
+4. Add clear truncation or compaction markers that state what was summarized.
+5. Expose the full review through `crit_status` or a dedicated full-review tool/result detail.
 
 ## Session state
 
@@ -164,7 +172,7 @@ Handle these cases:
 - Auto-starting the follow-up agent turn fails.
 - A Crit run is requested while another Crit run is active.
 
-If auto-start fails after review capture, the extension should still store the Crit context and inject it into the next user prompt.
+If auto-start fails after review capture, the extension should still store the Crit context and inject it into the next user prompt. If the formatted Crit context exceeds the configured injection budget, it should compact the injected block without discarding any comments from extension state, then expose the full review through a tool.
 
 ## Packaged skills
 
@@ -190,16 +198,17 @@ Test coverage should include:
 3. `/crit [args]` forwarding explicit args to an executable Crit stub from the current working directory.
 4. Convenience commands mapping to the same runner.
 5. Crit stdout fixture parsing for review file path and exact `Next round:` command.
-6. Review JSON fixture parsing for global, file, and line comments.
-7. Context-block generation from user-authored comments.
-8. Duplicate-injection prevention.
-9. Auto-start steering message emitted once per captured review.
-10. `crit_status` calling `crit status --json` and returning parsed JSON.
-11. `crit_reply` calling `crit comment --json` with bulk payloads.
-12. Missing binary failure.
-13. Missing review file failure.
-14. Invalid JSON failure.
-15. Active-run conflict failure.
+6. Review JSON fixture parsing for global, file, line, active, and resolved comments.
+7. Context-block generation from user-authored comments, including resolved history marked as guidance.
+8. Injection-budget compaction that preserves full review data in tool-accessible state.
+9. Duplicate-injection prevention.
+10. Auto-start steering message emitted once per captured review.
+11. `crit_status` calling `crit status --json` and returning parsed JSON.
+12. `crit_reply` calling `crit comment --json` with bulk payloads.
+13. Missing binary failure.
+14. Missing review file failure.
+15. Invalid JSON failure.
+16. Active-run conflict failure.
 
 Manual validation should verify the end-to-end browser loop with the real Homebrew-installed `crit` binary.
 
