@@ -82,16 +82,24 @@ export default function piCritExtension(pi: ExtensionAPI): void {
   });
 
   async function runCrit(args: string[], commandCtx?: ExtensionCommandContext): Promise<CritReviewSummary> {
-    if (state.activeRun || runner.active) throw new Error("Crit run already active");
-
-    state.activeRun = true;
-    state.activeCommand = args;
-    delete state.lastError;
+    let started = false;
 
     try {
+      if (state.activeRun || runner.active) throw new Error("Crit run already active");
+
+      state.activeRun = true;
+      state.activeCommand = args;
+      delete state.lastError;
+      started = true;
+
       commandCtx?.ui?.notify?.("Running Crit review...", "info");
       const result = await runner.run(args, cwd());
       state.activeRun = false;
+      started = false;
+
+      if (result.exitCode !== 0) {
+        throw new Error(result.stderr || `crit exited ${result.exitCode}`);
+      }
 
       if (!result.reviewPath) {
         const diagnostic = result.stderr || result.stdout || `crit exited ${result.exitCode} without a review path`;
@@ -129,7 +137,7 @@ export default function piCritExtension(pi: ExtensionAPI): void {
 
       return summary;
     } catch (error) {
-      state.activeRun = false;
+      if (started) state.activeRun = false;
       state.lastError = error instanceof Error ? error.message : String(error);
       commandCtx?.ui?.notify?.(state.lastError, "error");
       throw error;
