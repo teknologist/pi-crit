@@ -39,7 +39,6 @@ export default function piCritExtension(pi: ExtensionAPI): void {
         display: true,
         details,
       },
-      systemPrompt: "Use the Crit review context message as authoritative guidance for this turn.",
     };
   });
 
