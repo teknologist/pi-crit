@@ -81,3 +81,11 @@ export type CommandExecutor = (
   stdout: string;
   stderr: string;
 }>;
+
+export function defaultCritSettings(): CritSettings {
+  return {
+    maxInjectedChars: DEFAULT_MAX_INJECTED_CHARS,
+    binary: "crit",
+    replyAuthor: "Pi",
+  };
+}
