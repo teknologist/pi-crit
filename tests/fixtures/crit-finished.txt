@@ -1,0 +1,4 @@
+Started crit daemon at http://localhost:43123
+Review comments are in /tmp/pi-crit-review.json
+{"approved":false,"next_command":"crit --range abc123..def456"}
+Next round: crit --range abc123..def456

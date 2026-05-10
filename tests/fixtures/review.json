@@ -1,0 +1,47 @@
+{
+  "review_comments": [
+    {
+      "id": "r_arch",
+      "body": "Preserve user intent from Crit comments in Pi context.",
+      "scope": "review",
+      "author": "Eric",
+      "resolved": false,
+      "replies": []
+    },
+    {
+      "id": "r_done",
+      "body": "The install path concern is already resolved and should guide release docs.",
+      "scope": "review",
+      "author": "Eric",
+      "resolved": true,
+      "replies": [
+        { "id": "rp_done", "body": "Release path added.", "author": "Pi" }
+      ]
+    }
+  ],
+  "files": {
+    "src/index.ts": {
+      "comments": [
+        {
+          "id": "c_line",
+          "start_line": 42,
+          "end_line": 45,
+          "body": "This should auto-start one follow-up turn only.",
+          "quote": "sendMessage",
+          "anchor": "await pi.sendMessage",
+          "author": "Eric",
+          "resolved": false,
+          "replies": []
+        },
+        {
+          "id": "c_file",
+          "start_line": 0,
+          "body": "Keep this file as orchestration only; parser logic belongs elsewhere.",
+          "author": "Eric",
+          "resolved": false,
+          "replies": []
+        }
+      ]
+    }
+  }
+}
