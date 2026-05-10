@@ -90,6 +90,11 @@ export default function piCritExtension(pi: ExtensionAPI): void {
     }
   }
 
+  function clearPendingReviewContext(): void {
+    delete state.summary;
+    delete state.injectedReviewPath;
+  }
+
   async function findReviewPathFromStatus(): Promise<string | undefined> {
     try {
       const status = await runCritStatus(nodeCommandExecutor, settings.binary, cwd());
@@ -145,7 +150,7 @@ export default function piCritExtension(pi: ExtensionAPI): void {
           approved: true,
           comments: [],
         };
-        state.summary = summary;
+        clearPendingReviewContext();
         if (reviewPath) state.reviewPath = reviewPath;
         commandCtx?.ui?.notify?.("Crit approved with no unresolved comments to address.", "info");
         return summary;
@@ -158,6 +163,7 @@ export default function piCritExtension(pi: ExtensionAPI): void {
             approved: result.approved ?? true,
             comments: [],
           };
+          clearPendingReviewContext();
           commandCtx?.ui?.notify?.("Crit finished with no comments to address.", "info");
           return summary;
         }
@@ -183,13 +189,14 @@ export default function piCritExtension(pi: ExtensionAPI): void {
       } else {
         delete state.nextCommand;
       }
-      state.summary = summary;
-      delete state.injectedReviewPath;
-
       if (!hasUnresolvedComments(comments)) {
+        clearPendingReviewContext();
         commandCtx?.ui?.notify?.("Crit finished with no unresolved comments to address.", "info");
         return summary;
       }
+
+      state.summary = summary;
+      delete state.injectedReviewPath;
 
       commandCtx?.ui?.notify?.(`Captured ${comments.length} Crit comments. Starting Pi follow-up turn.`, "info");
       const details: { reviewPath: string; commentCount: number; nextCommand?: string } = {
